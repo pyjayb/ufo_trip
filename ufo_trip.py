@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import pygame, time, random
 
 pygame.init()
@@ -11,7 +12,17 @@ game_display = pygame.display.set_mode((display["width"], display["height"]))
 pygame.display.set_caption('UFO Trip')
 clock = pygame.time.Clock()
 
+pause_flag = False
+
 ufo_img = pygame.image.load('./images/ufo.png')
+pygame.display.set_icon(ufo_img)
+
+pygame.mixer.init()
+pygame.mixer.music.load('./sounds/y_files.mp3')
+game_start_sound = pygame.mixer.Sound('./sounds/opening.wav')
+crash_sound = pygame.mixer.Sound('./sounds/crash.wav')
+dodge_sound = pygame.mixer.Sound('./sounds/dodge.wav')
+interaction_sound = pygame.mixer.Sound('./sounds/interaction.wav')
 
 
 def display_dodge_obstacle(count):
@@ -57,7 +68,20 @@ def display_message(text, color, size_x, size_y, font_size):
 def crash():
     display_message('You crashed!', colors["red"], display["width"], display["height"], 120)
     time.sleep(2)
-    start_game_loop()
+    crash_flag = True
+    while crash_flag:
+        for event in pygame.event.get():
+            if event == pygame.QUIT:
+                quit_game()
+
+        game_display.fill(colors["black"])
+        display_message("GAME OVER", colors["white"], display["width"], display["height"], 120)
+
+        display_button("RETRY", 150, 400, 100, 50, colors["green"], colors["bright-green"], start_game_loop)
+        display_button("QUIT", 550, 400, 100, 50, colors["red"], colors["bright-red"], quit_game)
+
+        pygame.display.update()
+        clock.tick(15)
 
 
 def display_button(msg, pos_x, pos_y, width, height, idle_color, highlight_color, action=None):
@@ -66,29 +90,55 @@ def display_button(msg, pos_x, pos_y, width, height, idle_color, highlight_color
     if (pos_x + width) > mouse_position[0] > pos_x and (pos_y + height) > mouse_position[1] > pos_y:
         pygame.draw.rect(game_display, highlight_color, (pos_x, pos_y, width, height))
         if mouse_click[0] == 1 and action != None:
+            interaction_sound.set_volume(0.5)
+            interaction_sound.play()
             action()
     else:
         pygame.draw.rect(game_display, idle_color, (pos_x, pos_y, width, height))
-    display_message(msg, colors["white"], ((pos_x + width / 2) * 2), ((pos_y + height /2) * 2), 30)
+    display_message(msg, colors["white"], ((pos_x + width / 2) * 2), ((pos_y + height /2) * 2), 25)
 
 
-def display_game_intro():
-    intro_flag = True
-    while intro_flag:
+def unpause():
+    pygame.mixer.music.set_volume(0.3)
+    global pause_flag
+    pause_flag = False
+
+
+def pause_game():
+    pygame.mixer.music.set_volume(0.1)
+    global pause_flag
+    while pause_flag:
         for event in pygame.event.get():
             if event == pygame.QUIT:
-                pygame.quit()
-                quit()
+                quit_game()
 
         game_display.fill(colors["black"])
-        display_message("UFO Trip", colors["white"], display["width"], display["height"], 120)
+        display_message("Paused", colors["white"], display["width"], display["height"], 120)
 
-        display_button("Go", 150, 400, 100, 50, colors["green"], colors["bright-green"], start_game_loop)
+        display_button("CONTINUE", 150, 400, 100, 50, colors["green"], colors["bright-green"], unpause)
         display_button("QUIT", 550, 400, 100, 50, colors["red"], colors["bright-red"], quit_game)
 
         pygame.display.update()
         clock.tick(15)
-        # start_game_loop()
+
+
+def display_game_intro():
+    game_start_sound.set_volume(0.5)
+    game_start_sound.play()
+    intro_flag = True
+    while intro_flag:
+        for event in pygame.event.get():
+            if event == pygame.QUIT:
+                quit_game()
+
+        game_display.fill(colors["black"])
+        display_message("UFO Trip", colors["white"], display["width"], display["height"], 120)
+
+        display_button("GO", 150, 400, 100, 50, colors["green"], colors["bright-green"], start_game_loop)
+        display_button("QUIT", 550, 400, 100, 50, colors["red"], colors["bright-red"], quit_game)
+
+        pygame.display.update()
+        clock.tick(15)
 
 
 def quit_game():
@@ -97,6 +147,9 @@ def quit_game():
 
 
 def start_game_loop():
+    game_start_sound.stop()
+    pygame.mixer.music.set_volume(0.3)
+    pygame.mixer.music.play(-1)
     ufo_x_position = (display["width"] * 0.45)
     ufo_y_position = (display["height"] * 0.75)
 
@@ -106,6 +159,8 @@ def start_game_loop():
     obstacle_width = random.randrange(50, 150)
     obstacle_height = random.randrange(50, 150)
 
+    global pause_flag
+
     dodge_count = 0
 
     game_exit = False
@@ -113,8 +168,10 @@ def start_game_loop():
     while not game_exit:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                pygame.quit()
-                quit()
+                quit_game()
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_p:
+                pause_flag = True
+                pause_game()
         key_pressed = pygame.key.get_pressed()
         ufo_x_position = move_ufo(key_pressed, ufo_x_position)
         game_display.fill(colors["black"])
@@ -129,7 +186,9 @@ def start_game_loop():
             obstacle_width = random.randrange(50, 150)
             obstacle_height = random.randrange(50, 150)
             dodge_count += 1
-            obstacle_speed += 1
+            obstacle_speed += 0.3
+            dodge_sound.set_volume(0.2)
+            dodge_sound.play()
 
         if ufo_y_position < obstacle_position_start_y + obstacle_height:
             print('y_crossover')
@@ -138,6 +197,8 @@ def start_game_loop():
                 ufo_x_position + ufo_width > obstacle_position_start_x and
                 ufo_x_position + ufo_width < obstacle_position_start_x + obstacle_width):
                 print('x_crossover')
+                pygame.mixer.music.stop()
+                crash_sound.play()
                 crash()
 
         pygame.display.update()
